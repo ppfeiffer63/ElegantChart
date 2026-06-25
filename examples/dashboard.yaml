@@ -1,0 +1,62 @@
+title: ElegantChart Beispiele
+views:
+  - title: Dashboard
+    path: elegant-charts
+    cards:
+      - type: grid
+        columns: 2
+        cards:
+          - type: custom:elegant-chart-card
+            title: "Temperatur & Luftfeuchte"
+            chart_type: area
+            height: 300
+            entities:
+              - sensor.gartensensor_temperature
+              - sensor.gartensensor_humidity
+            min: 0
+            max: 100
+            show_legend: true
+
+          - type: custom:elegant-chart-card
+            title: "Solaranlage"
+            chart_type: bar
+            height: 300
+            entities:
+              - sensor.solar_power
+              - sensor.tracer_load_state
+            show_grid: true
+
+          - type: custom:elegant-chart-card
+            title: "Temperaturverlauf (7 Tage)"
+            chart_type: line
+            height: 300
+            entities:
+              - sensor.living_room_temperature
+              - sensor.bedroom_temperature
+              - sensor.kitchen_temperature
+            update_interval: 5000
+
+          - type: custom:elegant-chart-card
+            title: "Sensorvergleich"
+            chart_type: radar
+            height: 300
+            entities:
+              - sensor.gartensensor_temperature
+              - sensor.gartensensor_humidity
+              - sensor.solar_power
+            show_legend: true
+
+      - type: custom:elegant-chart-card
+        title: "Garten Live Monitoring (Vollbreite)"
+        chart_type: line
+        height: 400
+        entities:
+          - sensor.gartensensor_temperature
+          - sensor.gartensensor_humidity
+          - sensor.solar_power
+          - sensor.tracer_load_state
+        min: 0
+        max: 100
+        show_legend: true
+        show_grid: true
+        update_interval: 1000

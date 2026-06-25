@@ -1,0 +1,39 @@
+{
+  "name": "elegant-chart-card",
+  "version": "1.0.0",
+  "description": "Professional Chart.js Card for Home Assistant with WebSocket LiveUpdate",
+  "author": "ppfeiffer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://git.pfeiffer-privat.de/HA-Addons/ElegantChart.git"
+  },
+  "scripts": {
+    "build": "npm run minify",
+    "minify": "mkdir -p dist && terser src/*.js -o dist/elegant-chart-card.js -c -m",
+    "watch": "nodemon --watch src --exec 'npm run build'",
+    "lint": "eslint src/",
+    "release": "npm run build && git tag v$(node -p \"require('./package.json').version\") && git push --tags"
+  },
+  "devDependencies": {
+    "terser": "^5.24.0",
+    "nodemon": "^3.0.1",
+    "eslint": "^8.50.0"
+  },
+  "files": [
+    "manifest.json",
+    "README.md",
+    "src/",
+    "dist/"
+  ],
+  "keywords": [
+    "home-assistant",
+    "hacs",
+    "chart",
+    "card",
+    "dashboard",
+    "chart.js",
+    "sensor",
+    "monitoring"
+  ]
+}

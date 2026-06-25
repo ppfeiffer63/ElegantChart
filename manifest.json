@@ -1,0 +1,13 @@
+{
+  "name": "Elegant Chart Card",
+  "description": "Professional Chart.js Card für bis zu 5 Sensoren mit WebSocket LiveUpdate und Editor UI",
+  "version": "1.0.0",
+  "homeassistant": "2024.1.0",
+  "manifest_version": 1,
+  "domain": "elegant_chart_card",
+  "codeowners": ["@ppfeiffer"],
+  "requirements": [],
+  "documentation": "https://git.pfeiffer-privat.de/HA-Addons/ElegantChart",
+  "repository": "https://git.pfeiffer-privat.de/HA-Addons/ElegantChart",
+  "issues": "https://git.pfeiffer-privat.de/HA-Addons/ElegantChart/issues"
+}
