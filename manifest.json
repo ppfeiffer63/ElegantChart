@@ -8,6 +8,12 @@
     "@ppfeiffer63"
   ],
   "type": "frontend",
+  "resources": [
+    {
+      "url": "/hacsfiles/elegant-chart-card/dist/elegant-chart-card-bundle.js",
+      "type": "module"
+    }
+  ],
   "requirements": [],
   "documentation": "https://github.com/ppfeiffer63/ElegantChart",
   "repository": "https://github.com/ppfeiffer63/ElegantChart",
