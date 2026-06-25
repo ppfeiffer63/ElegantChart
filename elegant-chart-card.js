@@ -277,7 +277,7 @@ class ElegantChartCardEditor extends HTMLElement {
 class ElegantChartCard extends HTMLElement {
   constructor() {
     super();
-    this.hass = null;
+    this._hass = null;
     this.config = null;
   }
 
@@ -286,11 +286,16 @@ class ElegantChartCard extends HTMLElement {
       throw new Error('Mindestens einen Sensor angeben');
     }
     this.config = config;
-    this.render();
+    console.log('✅ setConfig aufgerufen mit:', config);
   }
 
   set hass(hass) {
+    console.log('✅ hass setter aufgerufen');
     this._hass = hass;
+    // WICHTIG: Nach hass gesetzt, rendern
+    if (!this.shadowRoot) {
+      this.render();
+    }
     this.updateChart();
   }
 
@@ -316,6 +321,7 @@ class ElegantChartCard extends HTMLElement {
   }
 
   render() {
+    console.log('✅ render() aufgerufen');
     const root = this.attachShadow({ mode: 'open' });
     const height = this.config?.height || 300;
     
@@ -336,11 +342,15 @@ class ElegantChartCard extends HTMLElement {
       </div>
     `;
 
-    setTimeout(() => this.drawChart(), 50);
+    console.log('✅ DOM erstellt, zeichne Chart in 100ms...');
+    setTimeout(() => this.drawChart(), 100);
   }
 
   drawChart() {
+    console.log('✅ drawChart() aufgerufen');
     const canvas = this.shadowRoot?.querySelector('#chart');
+    console.log('Canvas:', canvas);
+    
     if (!canvas) {
       console.error('❌ Canvas nicht gefunden!');
       return;
@@ -353,6 +363,7 @@ class ElegantChartCard extends HTMLElement {
     }
 
     console.log('✅ Canvas gefunden, zeichne Chart...');
+    console.log('Canvas width:', canvas.width, 'height:', canvas.height);
 
     const width = canvas.width;
     const height = canvas.height;
@@ -403,6 +414,8 @@ class ElegantChartCard extends HTMLElement {
     const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
     const entities = this.config?.entities || [];
 
+    console.log('Zeichne', entities.length, 'Entitäten');
+
     let x_pos = padding + 50;
     entities.forEach((entity, idx) => {
       const state = this._hass?.states[entity];
@@ -411,6 +424,8 @@ class ElegantChartCard extends HTMLElement {
       const y = height - padding - ((height - 2 * padding) * normalized);
 
       const color = colors[idx % colors.length];
+
+      console.log(`Entity ${idx}: ${entity} = ${value}`);
 
       // Punkt
       ctx.fillStyle = color;
@@ -436,8 +451,11 @@ class ElegantChartCard extends HTMLElement {
   }
 
   updateChart() {
-    if (this._hass) {
+    console.log('✅ updateChart() aufgerufen');
+    if (this._hass && this.config) {
       this.drawChart();
+    } else {
+      console.log('⏳ Warte auf hass/config:', { hass: !!this._hass, config: !!this.config });
     }
   }
 }
