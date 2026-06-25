@@ -184,13 +184,16 @@ class ElegantChartCard extends HTMLElement {
 }
 
 customElements.define('elegant-chart-card', ElegantChartCard);
+customElements.define('elegant-chart-card-editor', ElegantChartCardEditor);
 
-// Lovelace integration
+// Register with Home Assistant Lovelace
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'elegant-chart-card',
   name: 'Elegant Chart Card',
-  description: 'Professional Chart for Home Assistant Lovelace'
+  description: 'Professional Chart Card for Home Assistant',
+  preview: false,
+  editor: 'elegant-chart-card-editor'
 });
 
 console.log('✅ Elegant Chart Card loaded');
