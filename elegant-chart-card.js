@@ -1,4 +1,4 @@
-// Elegant Chart Card - Full Editor with Entity Validation
+// Elegant Chart Card - Full Featured
 
 class ElegantChartCardEditor extends HTMLElement {
   constructor() {
@@ -121,7 +121,6 @@ class ElegantChartCardEditor extends HTMLElement {
           color: var(--primary-text-color); 
           box-sizing: border-box;
           font-size: 13px;
-          font-family: monospace;
         }
 
         input:focus, select:focus, textarea:focus { 
@@ -173,19 +172,16 @@ class ElegantChartCardEditor extends HTMLElement {
         ` : ''}
 
         <h3>Basic Settings</h3>
-        
         <div class="field">
           <label>Title:</label>
-          <input type="text" id="title" placeholder="Chart Title" 
-                 value="${this._config.title || ''}">
+          <input type="text" id="title" placeholder="Chart Title" value="${this._config.title || ''}">
         </div>
 
         <h3>Entities (Sensoren)</h3>
-        
         <div class="field">
           <label>Sensoren eingeben (eine pro Zeile):</label>
-          <textarea id="entities" placeholder="sensor.temperature&#10;sensor.humidity&#10;sensor.pressure">${(this._config.entities || []).join('\n')}</textarea>
-          <div class="hint">Gültige Sensoren: ${this.availableEntities.slice(0, 5).join(', ')}...</div>
+          <textarea id="entities" placeholder="sensor.temperature&#10;sensor.humidity">${(this._config.entities || []).join('\n')}</textarea>
+          <div class="hint">Verfügbar: ${this.availableEntities.slice(0, 5).join(', ')}...</div>
         </div>
 
         <div class="button-group">
@@ -194,7 +190,6 @@ class ElegantChartCardEditor extends HTMLElement {
         </div>
 
         <h3>Chart Konfiguration</h3>
-        
         <div class="field">
           <label>Chart Type:</label>
           <select id="chart_type">
@@ -210,49 +205,23 @@ class ElegantChartCardEditor extends HTMLElement {
             <input type="number" id="height" value="${this._config.height || 300}">
           </div>
           <div class="field">
-            <label>Update Interval (ms):</label>
-            <input type="number" id="update_interval" value="${this._config.update_interval || 1000}">
+            <label>Min Value:</label>
+            <input type="number" id="min" value="${this._config.min !== undefined ? this._config.min : 0}">
           </div>
         </div>
 
         <div class="field-double">
-          <div class="field">
-            <label>Min Value:</label>
-            <input type="number" id="min" value="${this._config.min !== undefined ? this._config.min : 0}">
-            <div class="hint">Minimum Y-Achsen Wert</div>
-          </div>
           <div class="field">
             <label>Max Value:</label>
             <input type="number" id="max" value="${this._config.max !== undefined ? this._config.max : 100}">
-            <div class="hint">Maximum Y-Achsen Wert</div>
           </div>
-        </div>
-
-        <h3>Display Optionen</h3>
-        
-        <div class="field-double">
           <div class="field">
-            <label>Legende anzeigen:</label>
+            <label>Show Legend:</label>
             <select id="show_legend">
               <option ${this._config.show_legend !== false ? 'selected' : ''}>true</option>
               <option ${this._config.show_legend === false ? 'selected' : ''}>false</option>
             </select>
           </div>
-          <div class="field">
-            <label>Grid anzeigen:</label>
-            <select id="show_grid">
-              <option ${this._config.show_grid !== false ? 'selected' : ''}>true</option>
-              <option ${this._config.show_grid === false ? 'selected' : ''}>false</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="field">
-          <label>WebSocket Live-Updates:</label>
-          <select id="use_websocket">
-            <option ${this._config.use_websocket !== false ? 'selected' : ''}>true</option>
-            <option ${this._config.use_websocket === false ? 'selected' : ''}>false</option>
-          </select>
         </div>
       </div>
     `;
@@ -290,10 +259,6 @@ class ElegantChartCardEditor extends HTMLElement {
       this.updateConfig({ height: parseInt(e.target.value) || 300 });
     });
 
-    this.querySelector('#update_interval')?.addEventListener('change', (e) => {
-      this.updateConfig({ update_interval: parseInt(e.target.value) || 1000 });
-    });
-
     this.querySelector('#min')?.addEventListener('change', (e) => {
       this.updateConfig({ min: parseFloat(e.target.value) || 0 });
     });
@@ -305,32 +270,20 @@ class ElegantChartCardEditor extends HTMLElement {
     this.querySelector('#show_legend')?.addEventListener('change', (e) => {
       this.updateConfig({ show_legend: e.target.value === 'true' });
     });
-
-    this.querySelector('#show_grid')?.addEventListener('change', (e) => {
-      this.updateConfig({ show_grid: e.target.value === 'true' });
-    });
-
-    this.querySelector('#use_websocket')?.addEventListener('change', (e) => {
-      this.updateConfig({ use_websocket: e.target.value === 'true' });
-    });
   }
 }
 
-// Card Element with Chart Rendering
+// Card Element
 class ElegantChartCard extends HTMLElement {
   constructor() {
     super();
     this.hass = null;
     this.config = null;
-    this._chart = null;
   }
 
   setConfig(config) {
     if (!config.entities || !config.entities.length) {
       throw new Error('Mindestens einen Sensor angeben');
-    }
-    if (config.entities.length > 5) {
-      throw new Error('Maximum 5 Sensoren');
     }
     this.config = config;
     this.render();
@@ -356,158 +309,134 @@ class ElegantChartCard extends HTMLElement {
       entities: [],
       chart_type: 'line',
       height: 300,
-      update_interval: 1000,
-      show_legend: true,
-      show_grid: true,
-      use_websocket: true,
       min: 0,
-      max: 100
+      max: 100,
+      show_legend: true
     };
   }
 
   render() {
     const root = this.attachShadow({ mode: 'open' });
+    const height = this.config?.height || 300;
+    
     root.innerHTML = `
       <style>
-        :host {
-          display: block;
-          padding: 16px;
-        }
-        .card {
-          background: var(--ha-card-background, white);
-          border-radius: 4px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-          padding: 16px;
-        }
-        .title {
-          font-size: 20px;
-          font-weight: bold;
-          margin-bottom: 16px;
-        }
-        .chart-container {
-          position: relative;
-          height: ${this.config?.height || 300}px;
-          margin-bottom: 16px;
-        }
-        canvas {
-          max-width: 100%;
-        }
-        .info {
-          padding-top: 16px;
-          font-size: 12px;
-          color: #666;
-        }
+        :host { display: block; padding: 16px; }
+        .card { background: white; border-radius: 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 16px; }
+        .title { font-size: 20px; font-weight: bold; margin-bottom: 16px; }
+        canvas { display: block; width: 100%; height: auto; border: 1px solid #e5e7eb; border-radius: 4px; }
+        .info { margin-top: 12px; font-size: 12px; color: #666; }
       </style>
       <div class="card">
         <div class="title">${this.config?.title || 'Chart'}</div>
-        <div class="chart-container">
-          <canvas id="myChart"></canvas>
-        </div>
+        <canvas id="chart" width="600" height="${height}"></canvas>
         <div class="info">
-          Entities: ${(this.config?.entities || []).join(', ') || 'None configured'}
+          Sensoren: ${(this.config?.entities || []).join(', ')}
         </div>
       </div>
     `;
 
-    // Zeichne Chart nach einem Moment
-    setTimeout(() => this.drawChart(), 100);
+    setTimeout(() => this.drawChart(), 50);
   }
 
   drawChart() {
-    const canvas = this.shadowRoot?.querySelector('#myChart');
-    if (!canvas) return;
+    const canvas = this.shadowRoot?.querySelector('#chart');
+    if (!canvas) {
+      console.error('❌ Canvas nicht gefunden!');
+      return;
+    }
 
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx) {
+      console.error('❌ Canvas Context fehlt!');
+      return;
+    }
 
-    const colors = [
-      { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
-      { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
-      { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
-      { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
-      { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
-    ];
+    console.log('✅ Canvas gefunden, zeichne Chart...');
 
-    const entities = this.config?.entities || [];
-    const datasets = entities.map((entity, idx) => {
-      const state = this._hass?.states[entity];
-      const value = state ? parseFloat(state.state) : 0;
-      const label = state?.attributes?.friendly_name || entity;
-      const color = colors[idx % colors.length];
-
-      return {
-        label: label,
-        data: [value],
-        borderColor: color.border,
-        backgroundColor: color.bg,
-        borderWidth: 2,
-        fill: this.config?.chart_type === 'area'
-      };
-    });
-
-    // Einfacher Canvas Chart (kein Chart.js nötig)
-    const padding = 40;
     const width = canvas.width;
     const height = canvas.height;
+    const padding = 50;
     const min = this.config?.min || 0;
     const max = this.config?.max || 100;
 
-    // Hintergrund
-    ctx.fillStyle = '#f9fafb';
+    // Weiß füllen
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, width, height);
 
-    // Grid
-    if (this.config?.show_grid !== false) {
-      ctx.strokeStyle = '#e5e7eb';
-      ctx.lineWidth = 1;
-      for (let i = 0; i <= 5; i++) {
-        const y = padding + (height - 2 * padding) * (i / 5);
-        ctx.beginPath();
-        ctx.moveTo(padding, y);
-        ctx.lineTo(width - padding, y);
-        ctx.stroke();
-      }
+    // Grau Gridlines
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 5; i++) {
+      const y = padding + ((height - 2 * padding) * i / 5);
+      ctx.beginPath();
+      ctx.moveTo(padding, y);
+      ctx.lineTo(width - padding, y);
+      ctx.stroke();
     }
 
-    // Y-Achse Beschriftung
-    ctx.fillStyle = '#6b7280';
+    // Y-Achse Labels
+    ctx.fillStyle = '#666';
     ctx.font = '12px Arial';
     ctx.textAlign = 'right';
     for (let i = 0; i <= 5; i++) {
-      const value = max - (max - min) * (i / 5);
-      const y = padding + (height - 2 * padding) * (i / 5);
-      ctx.fillText(value.toFixed(1), padding - 10, y + 4);
+      const val = max - ((max - min) * i / 5);
+      const y = padding + ((height - 2 * padding) * i / 5);
+      ctx.fillText(val.toFixed(1), padding - 10, y + 4);
     }
 
-    // Daten zeichnen
-    datasets.forEach((dataset, idx) => {
-      const value = dataset.data[0] || 0;
+    // X-Achse
+    ctx.strokeStyle = '#333';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, height - padding);
+    ctx.lineTo(width - padding, height - padding);
+    ctx.stroke();
+
+    // Y-Achse
+    ctx.beginPath();
+    ctx.moveTo(padding, padding);
+    ctx.lineTo(padding, height - padding);
+    ctx.stroke();
+
+    // Datenpunkte zeichnen
+    const colors = ['#3b82f6', '#ef4444', '#10b981', '#f59e0b', '#8b5cf6'];
+    const entities = this.config?.entities || [];
+
+    let x_pos = padding + 50;
+    entities.forEach((entity, idx) => {
+      const state = this._hass?.states[entity];
+      const value = state ? parseFloat(state.state) : 0;
       const normalized = (value - min) / (max - min);
-      const y = padding + (height - 2 * padding) * (1 - normalized);
-      const x = width / 2;
+      const y = height - padding - ((height - 2 * padding) * normalized);
+
+      const color = colors[idx % colors.length];
 
       // Punkt
-      ctx.fillStyle = dataset.borderColor;
+      ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x, y, 6, 0, 2 * Math.PI);
+      ctx.arc(x_pos, y, 5, 0, 2 * Math.PI);
       ctx.fill();
 
-      // Label
-      ctx.fillStyle = '#374151';
+      // Wert
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold 12px Arial';
       ctx.textAlign = 'center';
-      ctx.fillText(dataset.label, x, height - 10);
-      ctx.fillText(value.toFixed(2), x, height - 25);
+      ctx.fillText(value.toFixed(2), x_pos, y - 15);
+
+      // Label
+      ctx.fillStyle = '#666';
+      ctx.font = '11px Arial';
+      ctx.fillText(state?.attributes?.friendly_name || entity, x_pos, height - 15);
+
+      x_pos += (width - 2 * padding - 100) / entities.length;
     });
 
-    // Titel
-    ctx.fillStyle = '#111827';
-    ctx.font = 'bold 14px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(this.config?.title || 'Chart', width / 2, 25);
+    console.log('✅ Chart gezeichnet!');
   }
 
   updateChart() {
-    if (this.config?.use_websocket !== false) {
+    if (this._hass) {
       this.drawChart();
     }
   }
@@ -516,12 +445,11 @@ class ElegantChartCard extends HTMLElement {
 customElements.define('elegant-chart-card', ElegantChartCard);
 customElements.define('elegant-chart-card-editor', ElegantChartCardEditor);
 
-// Register with Home Assistant Lovelace
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: 'elegant-chart-card',
   name: 'Elegant Chart Card',
-  description: 'Professional Chart Card for Home Assistant',
+  description: 'Professional Chart for Home Assistant',
   preview: false,
   editor: 'elegant-chart-card-editor'
 });
