@@ -4,10 +4,14 @@
   "version": "1.0.1",
   "homeassistant": "2024.1.0",
   "manifest_version": 1,
-  "codeowners": ["@ppfeiffer63"],
+  "codeowners": [
+    "@ppfeiffer63"
+  ],
   "type": "frontend",
   "resources": [
-    "dist/elegant-chart-card.js"
+    "dist/elegant-chart-card.js",
+    "dist/editor.js",
+    "dist/websocket-manager.js"
   ],
   "requirements": [],
   "documentation": "https://github.com/ppfeiffer63/ElegantChart",
