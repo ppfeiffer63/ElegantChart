@@ -1,6 +1,6 @@
 {
   "name": "elegant-chart-card",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Professional Chart.js Card for Home Assistant with WebSocket LiveUpdate",
   "author": "ppfeiffer",
   "license": "MIT",
