@@ -9,9 +9,7 @@
   ],
   "type": "frontend",
   "resources": [
-    "dist/elegant-chart-card.js",
-    "dist/editor.js",
-    "dist/websocket-manager.js"
+    "dist/elegant-chart-card-bundle.js"
   ],
   "requirements": [],
   "documentation": "https://github.com/ppfeiffer63/ElegantChart",
