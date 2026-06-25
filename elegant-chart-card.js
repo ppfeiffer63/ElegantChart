@@ -19,6 +19,91 @@ class ElegantChartWebSocketManager {
   }
 }
 
+class ElegantChartCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.hass = null;
+  }
+
+  setConfig(config) {
+    this.config = config;
+    this.render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
+  render() {
+    const root = this.attachShadow({ mode: 'open' });
+    root.innerHTML = `
+      <style>
+        :host {
+          display: block;
+        }
+        .editor {
+          padding: 16px;
+        }
+        .field {
+          margin-bottom: 16px;
+        }
+        label {
+          display: block;
+          margin-bottom: 8px;
+          font-weight: bold;
+        }
+        input, select {
+          width: 100%;
+          padding: 8px;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          box-sizing: border-box;
+        }
+      </style>
+      <div class="editor">
+        <div class="field">
+          <label>Title:</label>
+          <input type="text" id="title" placeholder="Chart Title" 
+                 value="${this.config?.title || ''}">
+        </div>
+        <div class="field">
+          <label>Chart Type:</label>
+          <select id="chart_type">
+            <option ${(this.config?.chart_type || 'line') === 'line' ? 'selected' : ''}>line</option>
+            <option ${(this.config?.chart_type || 'line') === 'bar' ? 'selected' : ''}>bar</option>
+            <option ${(this.config?.chart_type || 'line') === 'area' ? 'selected' : ''}>area</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Height (px):</label>
+          <input type="number" id="height" value="${this.config?.height || 300}">
+        </div>
+      </div>
+    `;
+    
+    root.querySelector('#title').addEventListener('change', (e) => {
+      this.config.title = e.target.value;
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: this.config }));
+    });
+    
+    root.querySelector('#chart_type').addEventListener('change', (e) => {
+      this.config.chart_type = e.target.value;
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: this.config }));
+    });
+    
+    root.querySelector('#height').addEventListener('change', (e) => {
+      this.config.height = parseInt(e.target.value);
+      this.dispatchEvent(new CustomEvent('config-changed', { detail: this.config }));
+    });
+  }
+}
+
+customElements.define('elegant-chart-card-editor', ElegantChartCardEditor);
+
 class ElegantChartCard extends HTMLElement {
   constructor() {
     super();
@@ -40,6 +125,20 @@ class ElegantChartCard extends HTMLElement {
 
   get hass() {
     return this._hass;
+  }
+
+  static getConfigElement() {
+    return document.createElement('elegant-chart-card-editor');
+  }
+
+  static getStubConfig() {
+    return {
+      type: 'custom:elegant-chart-card',
+      title: 'Elegant Chart',
+      entities: [],
+      chart_type: 'line',
+      height: 300
+    };
   }
 
   render() {
