@@ -135,25 +135,6 @@ class ElegantChartCardEditor extends HTMLElement {
           font-family: monospace;
         }
 
-        .entity-selector {
-          max-height: 150px;
-          overflow-y: auto;
-          border: 1px solid var(--divider-color);
-          border-radius: 4px;
-          background: var(--card-background-color);
-        }
-
-        .entity-option {
-          padding: 8px;
-          cursor: pointer;
-          border-bottom: 1px solid var(--divider-color);
-          font-size: 12px;
-        }
-
-        .entity-option:hover {
-          background: var(--divider-color);
-        }
-
         .hint { 
           font-size: 11px; 
           color: var(--secondary-text-color); 
@@ -280,12 +261,10 @@ class ElegantChartCardEditor extends HTMLElement {
   }
 
   _attachListeners() {
-    // Title
     this.querySelector('#title')?.addEventListener('change', (e) => {
       this.updateConfig({ title: e.target.value });
     });
 
-    // Entities
     this.querySelector('#validate')?.addEventListener('click', () => {
       const input = this.querySelector('#entities').value;
       const entities = input.split('\n').map(e => e.trim()).filter(e => e);
@@ -303,7 +282,6 @@ class ElegantChartCardEditor extends HTMLElement {
       this.updateConfig({ entities: [] });
     });
 
-    // Chart settings
     this.querySelector('#chart_type')?.addEventListener('change', (e) => {
       this.updateConfig({ chart_type: e.target.value });
     });
@@ -338,12 +316,13 @@ class ElegantChartCardEditor extends HTMLElement {
   }
 }
 
-// Card Element
+// Card Element with Chart Rendering
 class ElegantChartCard extends HTMLElement {
   constructor() {
     super();
     this.hass = null;
     this.config = null;
+    this._chart = null;
   }
 
   setConfig(config) {
@@ -359,6 +338,7 @@ class ElegantChartCard extends HTMLElement {
 
   set hass(hass) {
     this._hass = hass;
+    this.updateChart();
   }
 
   get hass() {
@@ -404,9 +384,13 @@ class ElegantChartCard extends HTMLElement {
           font-weight: bold;
           margin-bottom: 16px;
         }
+        .chart-container {
+          position: relative;
+          height: ${this.config?.height || 300}px;
+          margin-bottom: 16px;
+        }
         canvas {
           max-width: 100%;
-          height: ${this.config?.height || 300}px;
         }
         .info {
           padding-top: 16px;
@@ -416,12 +400,116 @@ class ElegantChartCard extends HTMLElement {
       </style>
       <div class="card">
         <div class="title">${this.config?.title || 'Chart'}</div>
-        <canvas id="myChart"></canvas>
+        <div class="chart-container">
+          <canvas id="myChart"></canvas>
+        </div>
         <div class="info">
           Entities: ${(this.config?.entities || []).join(', ') || 'None configured'}
         </div>
       </div>
     `;
+
+    // Zeichne Chart nach einem Moment
+    setTimeout(() => this.drawChart(), 100);
+  }
+
+  drawChart() {
+    const canvas = this.shadowRoot?.querySelector('#myChart');
+    if (!canvas) return;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const colors = [
+      { border: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+      { border: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)' },
+      { border: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
+      { border: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+      { border: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' }
+    ];
+
+    const entities = this.config?.entities || [];
+    const datasets = entities.map((entity, idx) => {
+      const state = this._hass?.states[entity];
+      const value = state ? parseFloat(state.state) : 0;
+      const label = state?.attributes?.friendly_name || entity;
+      const color = colors[idx % colors.length];
+
+      return {
+        label: label,
+        data: [value],
+        borderColor: color.border,
+        backgroundColor: color.bg,
+        borderWidth: 2,
+        fill: this.config?.chart_type === 'area'
+      };
+    });
+
+    // Einfacher Canvas Chart (kein Chart.js nötig)
+    const padding = 40;
+    const width = canvas.width;
+    const height = canvas.height;
+    const min = this.config?.min || 0;
+    const max = this.config?.max || 100;
+
+    // Hintergrund
+    ctx.fillStyle = '#f9fafb';
+    ctx.fillRect(0, 0, width, height);
+
+    // Grid
+    if (this.config?.show_grid !== false) {
+      ctx.strokeStyle = '#e5e7eb';
+      ctx.lineWidth = 1;
+      for (let i = 0; i <= 5; i++) {
+        const y = padding + (height - 2 * padding) * (i / 5);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(width - padding, y);
+        ctx.stroke();
+      }
+    }
+
+    // Y-Achse Beschriftung
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= 5; i++) {
+      const value = max - (max - min) * (i / 5);
+      const y = padding + (height - 2 * padding) * (i / 5);
+      ctx.fillText(value.toFixed(1), padding - 10, y + 4);
+    }
+
+    // Daten zeichnen
+    datasets.forEach((dataset, idx) => {
+      const value = dataset.data[0] || 0;
+      const normalized = (value - min) / (max - min);
+      const y = padding + (height - 2 * padding) * (1 - normalized);
+      const x = width / 2;
+
+      // Punkt
+      ctx.fillStyle = dataset.borderColor;
+      ctx.beginPath();
+      ctx.arc(x, y, 6, 0, 2 * Math.PI);
+      ctx.fill();
+
+      // Label
+      ctx.fillStyle = '#374151';
+      ctx.textAlign = 'center';
+      ctx.fillText(dataset.label, x, height - 10);
+      ctx.fillText(value.toFixed(2), x, height - 25);
+    });
+
+    // Titel
+    ctx.fillStyle = '#111827';
+    ctx.font = 'bold 14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(this.config?.title || 'Chart', width / 2, 25);
+  }
+
+  updateChart() {
+    if (this.config?.use_websocket !== false) {
+      this.drawChart();
+    }
   }
 }
 
