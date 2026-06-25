@@ -1,8 +1,6 @@
 {
   "name": "Elegant Chart Card",
   "content_in_root": false,
-  "filename": "elegant-chart-card-bundle.js",
-  "homeassistant": "2024.1.0",
-  "render_readme": true,
-  "requirements": []
+  "filename": "elegant-chart-card.js",
+  "render_readme": true
 }
