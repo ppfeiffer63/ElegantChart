@@ -10,7 +10,7 @@
   "type": "frontend",
   "resources": [
     {
-      "url": "/hacsfiles/elegant-chart-card/dist/elegant-chart-card-bundle.js",
+      "url": "/hacsfiles/elegant-chart-card/elegant-chart-card-bundle.js",
       "type": "module"
     }
   ],
