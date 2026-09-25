@@ -1,0 +1,96 @@
+name: GitHub Sync (HACS)
+
+# HACS liest nur GitHub. Dieser Workflow spiegelt main + Tag nach GitHub und
+# übernimmt das Release inkl. Release-Asset (elegant-chart-card.js), das HACS
+# wegen "content_in_root": false in hacs.json erwartet.
+#
+# Benötigtes Secret (Org- oder Repo-Secret):
+#   GH_MIRROR_TOKEN  GitHub-Token mit Schreibrechten auf ppfeiffer63/ElegantChart
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag, z. B. v1.0.2 (leer = neuester Tag)"
+        required: false
+        type: string
+
+jobs:
+  github:
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-22.04
+    env:
+      GH_REPO: ppfeiffer63/ElegantChart
+      FORGEJO_REPO: HA-Addons/ElegantChart
+      FORGEJO_URL: http://192.168.11.16:3000
+      GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+      INPUT_TAG: ${{ inputs.tag }}
+
+    steps:
+      - name: Clone
+        run: |
+          apt-get update > /dev/null 2>&1
+          apt-get install -y git curl > /dev/null 2>&1
+          git clone "$FORGEJO_URL/$FORGEJO_REPO.git" .
+          git fetch --tags --force
+
+      - name: Push to GitHub and create release
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "GH_MIRROR_TOKEN fehlt – GitHub-Sync übersprungen"
+            exit 0
+          fi
+
+          TAG="${INPUT_TAG:-}"
+          if [ -z "$TAG" ]; then TAG="${GITHUB_REF_NAME:-}"; fi
+          case "$TAG" in v*) ;; *) TAG=$(git describe --tags --abbrev=0) ;; esac
+          echo "Tag: $TAG"
+          git checkout -q "$TAG"
+
+          # 1) main + Tag spiegeln (Force: GitHub ist nur ein Spiegel)
+          GH_URL="https://x-access-token:${GH_TOKEN}@github.com/${GH_REPO}.git"
+          git push --force "$GH_URL" "refs/remotes/origin/main:refs/heads/main"
+          git push --force "$GH_URL" "refs/tags/$TAG:refs/tags/$TAG"
+
+          # 2) Release-Notes aus dem Forgejo-Release übernehmen
+          export TAG
+          curl -sS "$FORGEJO_URL/api/v1/repos/$FORGEJO_REPO/releases/tags/$TAG" > /tmp/forgejo_release.json || echo "{}" > /tmp/forgejo_release.json
+          export BODY=$(python3 -c 'import json;print(json.load(open("/tmp/forgejo_release.json")).get("body") or "")' 2>/dev/null || true)
+          if [ -z "$BODY" ]; then BODY="Release $TAG"; fi
+
+          # 3) GitHub-Release anlegen (falls noch nicht vorhanden)
+          API="https://api.github.com/repos/$GH_REPO"
+          CODE=$(curl -sS -o /tmp/gh_release.json -w '%{http_code}' \
+            -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API/releases/tags/$TAG")
+          if [ "$CODE" != "200" ]; then
+            python3 - <<'PY' > /tmp/gh_payload.json
+          import json, os
+          print(json.dumps({
+              "tag_name": os.environ["TAG"],
+              "name": os.environ["TAG"],
+              "body": os.environ["BODY"],
+              "draft": False,
+              "prerelease": False,
+              "make_latest": "true",
+          }))
+          PY
+            curl -sS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              "$API/releases" -d @/tmp/gh_payload.json > /tmp/gh_release.json
+          fi
+
+          # 4) Release-Asset (elegant-chart-card.js) von Forgejo holen und an GitHub-Release anhängen
+          RELEASE_ID=$(python3 -c 'import json;print(json.load(open("/tmp/gh_release.json"))["id"])')
+          curl -sSL -o /tmp/elegant-chart-card.js "$FORGEJO_URL/$FORGEJO_REPO/releases/download/$TAG/elegant-chart-card.js"
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Content-Type: application/javascript" \
+            --data-binary @/tmp/elegant-chart-card.js \
+            "https://uploads.github.com/repos/$GH_REPO/releases/$RELEASE_ID/assets?name=elegant-chart-card.js" > /dev/null
+
+          echo "✅ GitHub-Release $TAG: https://github.com/$GH_REPO/releases/tag/$TAG"
