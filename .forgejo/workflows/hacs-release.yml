@@ -1,0 +1,155 @@
+name: HACS Release
+
+# Version steht in package.json. Build: terser src/*.js -> dist/elegant-chart-card.js.
+# hacs.json hat "content_in_root": false + "filename": "elegant-chart-card.js"
+# -> HACS erwartet die Datei als Release-ASSET, daher Upload nach dem Build.
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump_type:
+        description: "Version bump: patch, minor, or major"
+        required: true
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-22.04
+    steps:
+      - name: Checkout code
+        run: |
+          apt-get update > /dev/null 2>&1
+          apt-get install -y git > /dev/null 2>&1
+          git clone http://192.168.11.16:3000/HA-Addons/ElegantChart.git .
+
+      - name: Install deps
+        run: npm install --no-audit --no-fund
+
+      - name: Build (terser)
+        run: npm run build
+
+      - name: Validate JavaScript syntax
+        run: node --check dist/elegant-chart-card.js
+
+      - name: Validate hacs.json and package.json
+        run: |
+          python3 -m json.tool hacs.json > /dev/null
+          python3 -m json.tool package.json > /dev/null
+
+      - name: Validate layout
+        run: |
+          test -f README.md || (echo "README.md missing" && exit 1)
+          test -f dist/elegant-chart-card.js || (echo "dist/elegant-chart-card.js missing" && exit 1)
+          echo "✅ All validations passed"
+
+  release:
+    needs: validate
+    runs-on: ubuntu-latest
+    container:
+      image: catthehacker/ubuntu:act-22.04
+    env:
+      REPO: HA-Addons/ElegantChart
+      FORGEJO_URL: http://192.168.11.16:3000
+      RELEASE_TOKEN: ${{ secrets.RELEASE_TOKEN }}
+
+    steps:
+      - name: Check secret
+        run: test -n "$RELEASE_TOKEN" || { echo "Secret RELEASE_TOKEN fehlt"; exit 1; }
+
+      - name: Setup and Clone
+        run: |
+          apt-get update > /dev/null 2>&1
+          apt-get install -y git curl > /dev/null 2>&1
+          git clone "http://ppfeiffer:${RELEASE_TOKEN}@192.168.11.16:3000/${REPO}.git" .
+          git config user.name "CI/CD Bot"
+          git config user.email "ci@meshdresden.eu"
+          npm install --no-audit --no-fund
+
+      - name: Calculate Version
+        run: |
+          set -euo pipefail
+          LATEST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LATEST_TAG" ]; then
+            LATEST_TAG="v$(node -p "require('./package.json').version")"
+          fi
+          echo "Latest tag: $LATEST_TAG"
+          echo "$LATEST_TAG" > /tmp/prev_tag.txt
+
+          VERSION=${LATEST_TAG#v}
+          MAJOR=$(echo "$VERSION" | cut -d. -f1); MINOR=$(echo "$VERSION" | cut -d. -f2); PATCH=$(echo "$VERSION" | cut -d. -f3)
+          MAJOR=${MAJOR:-0}; MINOR=${MINOR:-0}; PATCH=${PATCH:-0}
+
+          BUMP_TYPE="${{ inputs.bump_type }}"
+          if [ "$BUMP_TYPE" = "major" ]; then MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0
+          elif [ "$BUMP_TYPE" = "minor" ]; then MINOR=$((MINOR + 1)); PATCH=0
+          else PATCH=$((PATCH + 1)); fi
+
+          NEW_VERSION="$MAJOR.$MINOR.$PATCH"
+          echo "$NEW_VERSION" > /tmp/version.txt
+          echo "v$NEW_VERSION" > /tmp/tag.txt
+          echo "Calculated version: $NEW_VERSION"
+
+      - name: Release notes
+        run: |
+          PREV=$(cat /tmp/prev_tag.txt)
+          if git rev-parse -q --verify "refs/tags/$PREV" > /dev/null; then RANGE="$PREV..HEAD"; else RANGE="HEAD"; fi
+          git log --pretty='- %s' $RANGE | grep -v 'bump version' > /tmp/notes.md || true
+          test -s /tmp/notes.md || echo "- Maintenance release" > /tmp/notes.md
+          cat /tmp/notes.md
+
+      - name: Bump package.json and build
+        run: |
+          set -euo pipefail
+          V=$(cat /tmp/version.txt)
+          node -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('package.json'));p.version='$V';fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');"
+          npm run build
+          node --check dist/elegant-chart-card.js
+          echo "✅ package.json und dist/elegant-chart-card.js auf $V"
+
+      - name: Commit, tag and push
+        run: |
+          set -euo pipefail
+          TAG=$(cat /tmp/tag.txt)
+          git add package.json dist/elegant-chart-card.js
+          git commit -m "chore: bump version to $TAG"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin HEAD:main
+          git push origin "$TAG"
+
+      - name: Create Release on Forgejo
+        run: |
+          set -euo pipefail
+          export TAG=$(cat /tmp/tag.txt)
+          python3 - <<'PY' > /tmp/release.json
+          import json, os
+          print(json.dumps({
+              "tag_name": os.environ["TAG"],
+              "name": os.environ["TAG"],
+              "body": open("/tmp/notes.md").read(),
+              "draft": False,
+              "prerelease": False,
+          }))
+          PY
+          RESP=$(curl -sS -X POST "$FORGEJO_URL/api/v1/repos/$REPO/releases" \
+            -H "Authorization: token $RELEASE_TOKEN" -H "Content-Type: application/json" \
+            -d @/tmp/release.json)
+          echo "$RESP" | python3 -c 'import sys,json;print(json.load(sys.stdin)["id"])' > /tmp/release_id.txt
+          echo "✅ Release $TAG auf Forgejo erstellt (ID $(cat /tmp/release_id.txt))"
+
+      - name: Asset an Release anhängen (hacs.json content_in_root=false)
+        run: |
+          set -euo pipefail
+          RELEASE_ID=$(cat /tmp/release_id.txt)
+          curl -sS -X POST \
+            -H "Authorization: token $RELEASE_TOKEN" \
+            -F "attachment=@dist/elegant-chart-card.js;filename=elegant-chart-card.js" \
+            "$FORGEJO_URL/api/v1/repos/$REPO/releases/$RELEASE_ID/assets"
+          echo "✅ elegant-chart-card.js als Release-Asset angehängt"
+          echo "📍 https://git.pfeiffer-privat.de/$REPO/releases/tag/$(cat /tmp/tag.txt)"
